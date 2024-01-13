@@ -16,14 +16,14 @@ const char* ssid = "WIFI_SSID";
 const char* password = "WIFI_PASS";
 
 // Function declarations
-String getHackerNewsPost(int index, const DynamicJsonDocument& topPostIDsJson);
+String getHackerNewsPost(int index, const JsonDocument& topPostIDsJson);
 void renderScreen(const char* title, const char* url);
 void displayLoadingScreen(String message);
 
 // Global variables
 int currentPostIndex = 0;
 volatile bool buttonPressedFlag = false;
-DynamicJsonDocument topPostIDsJson(5128);
+JsonDocument topPostIDsJson;
 
 void setup() {
   Serial.begin(115200);
@@ -53,7 +53,7 @@ void setup() {
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String topPostIDs = http.getString();
-    DynamicJsonDocument doc(5128);
+    JsonDocument doc;
     deserializeJson(doc, topPostIDs);
     topPostIDsJson = doc;
   }
@@ -66,7 +66,7 @@ void setup() {
   String post = getHackerNewsPost(currentPostIndex, topPostIDsJson);
 
   // Parse the JSON response
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   deserializeJson(doc, post);
   const char* title = doc["title"];
   const char* url = doc["url"];
@@ -92,7 +92,8 @@ void loop() {
     String post = getHackerNewsPost(currentPostIndex, topPostIDsJson);
 
     // Parse the JSON response
-    DynamicJsonDocument doc(1024);
+    Serial.println("Parsing JSON response");
+    JsonDocument doc;
     deserializeJson(doc, post);
     const char* title = doc["title"];
     const char* url = doc["url"];
@@ -104,7 +105,8 @@ void loop() {
   }
 }
 
-String getHackerNewsPost(int index, const DynamicJsonDocument& topPostIDsJson) {
+String getHackerNewsPost(int index, const JsonDocument& topPostIDsJson) {
+  Serial.println("Fetching post with index: " + String(index));
   HTTPClient http;
   String response = "";
 
@@ -125,6 +127,7 @@ String getHackerNewsPost(int index, const DynamicJsonDocument& topPostIDsJson) {
 }
 
 void renderScreen(const char* title, const char* url) {
+  Serial.println("Rendering screen with title: " + String(title) + " and url: " + String(url));
   // Display the post on the OLED screen
   display.clear();
   display.setFont(ArialMT_Plain_10);
@@ -132,21 +135,30 @@ void renderScreen(const char* title, const char* url) {
   //display.drawString(0, 0, "Top HackerNews Post:");
   display.drawStringMaxWidth(0, 0, 64, title);
 
-  // generate QR code
-  QRCode qrcode;
-  uint8_t qrcodeData[qrcode_getBufferSize(3)];
-  qrcode_initText(&qrcode, qrcodeData, 3, 0, (const char*)url);
-  // Draw the qr code with 2x2 pixels using setPixelColor
-  for (uint8_t y = 0; y < qrcode.size; y++) {
-    for (uint8_t x = 0; x < qrcode.size; x++) {
-      if (qrcode_getModule(&qrcode, x, y)) {
-        display.setPixelColor((x*2)+64, y*2, WHITE);
-        display.setPixelColor((x*2)+64+1, y*2, WHITE);
-        display.setPixelColor((x*2)+64, y*2+1, WHITE);
-        display.setPixelColor((x*2)+64+1, y*2+1, WHITE);
+  if (url != nullptr) {
+    if (strlen(url) > 77) {
+      display.drawStringMaxWidth(64, 16, 64, "Provided URL is too long");
+    } else {
+      // generate QR code
+      QRCode qrcode;
+      uint8_t qrcodeData[qrcode_getBufferSize(3)];
+      qrcode_initText(&qrcode, qrcodeData, 3, 0, (const char*)url);
+      // Draw the qr code with 2x2 pixels using setPixelColor
+      for (uint8_t y = 0; y < qrcode.size; y++) {
+        for (uint8_t x = 0; x < qrcode.size; x++) {
+          if (qrcode_getModule(&qrcode, x, y)) {
+            display.setPixelColor((x*2)+64, y*2, WHITE);
+            display.setPixelColor((x*2)+64+1, y*2, WHITE);
+            display.setPixelColor((x*2)+64, y*2+1, WHITE);
+            display.setPixelColor((x*2)+64+1, y*2+1, WHITE);
+          }
+        }
       }
     }
+  } else {
+    display.drawStringMaxWidth(64, 16, 64, "No URL provided");
   }
+  
   display.display();
 }
 
